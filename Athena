@@ -1,0 +1,74 @@
+# Request 1 
+
+CREATE EXTERNAL TABLE IF NOT EXISTS ccindex (
+  url_surtkey                   STRING,
+  url                           STRING,
+  url_host_name                 STRING,
+  url_host_tld                  STRING,
+  url_host_2nd_last_part        STRING,
+  url_host_3rd_last_part        STRING,
+  url_host_4th_last_part        STRING,
+  url_host_5th_last_part        STRING,
+  url_host_registry_suffix      STRING,
+  url_host_registered_domain    STRING,
+  url_host_private_suffix       STRING,
+  url_host_private_domain       STRING,
+  url_protocol                  STRING,
+  url_port                      INT,
+  url_path                      STRING,
+  url_query                     STRING,
+  fetch_time                    TIMESTAMP,
+  fetch_status                  SMALLINT,
+  content_digest                STRING,
+  content_mime_type             STRING,
+    content_mime_detected         STRING,
+  content_charset               STRING,
+  content_languages             STRING,
+  warc_filename                 STRING,
+  warc_record_offset            INT,
+  warc_record_length            INT,
+  warc_segment                  STRING)
+PARTITIONED BY (
+  crawl                         STRING,
+  subset                        STRING)
+STORED AS parquet
+LOCATION 's3://commoncrawl/cc-index/table/cc-main/warc/';
+
+# Request 2
+
+MSCK REPAIR TABLE ccindex
+
+# Request 3
+
+CREATE EXTERNAL TABLE IF NOT EXISTS `ccindex`.`website500` ( `row_no` string, `companyname` string, `websiteaddress` string
+)
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe' WITH SERDEPROPERTIES ( 'serialization.format' = ',', 'field.delim' = ';'
+) LOCATION 's3://dirga/website500'
+TBLPROPERTIES ('has_encrypted_data'='false')
+
+# Request 4
+
+Create table swiss_firms_5 AS
+SELECT url,
+       url_host_name,
+       url_host_registered_domain,
+       warc_filename,
+       warc_record_offset,
+       warc_record_offset + warc_record_length as warc_record_end,
+       crawl,
+       subset
+FROM ccindex.ccindex
+JOIN ccindex.swiss_match_07_11 ON ccindex.ccindex.url_host_registered_domain = ccindex.swiss_match_07_11.websiteaddress
+WHERE crawl = 'CC-MAIN-2020-05'
+  AND subset = 'warc'
+  
+Request 5 # creating a table with row numbers that we can then sort on
+
+Create table swiss_firms_ADD_NUM_2 AS
+SELECT *,
+row_number() OVER (PARTITION BY url_host_name) as row_num 
+from swiss_firms_ADD_NUM
+
+Request 6# filtering on row numbers
+SELECT * from swiss_firms
+WHERE(row_num <= 100)
